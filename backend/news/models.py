@@ -25,6 +25,11 @@ class Article(models.Model):
     )
 
     image = models.URLField(blank=True)
+    image_file = models.ImageField(
+        upload_to="articles/%Y/%m/",
+        blank=True,
+        null=True,
+    )
     is_featured = models.BooleanField(default=False)
     is_published = models.BooleanField(default=False)
 
