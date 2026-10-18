@@ -6,6 +6,30 @@ dist/
 wheels/
 *.egg-info
 
-# Virtual environments
-.venv
+# Environment files
+.env
+.env.*
+!.env.example
 
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Local databases and uploaded files
+*.sqlite3
+*.sqlite3-*
+*.backup
+*.bak
+media/
+staticfiles/
+
+# Local caches and tooling output
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+*.log
+.DS_Store
