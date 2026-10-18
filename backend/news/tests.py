@@ -92,6 +92,31 @@ class ArticleVisibilityTests(APITestCase):
         self.assertNotIn("published-tech-story", slugs)
         self.assertIn("draft-tech-story", slugs)
 
+    def test_category_filter(self):
+        other_cat = Category.objects.create(name="Health", slug="health")
+        Article.objects.create(
+            title="Health News",
+            slug="health-news",
+            summary="Health summary",
+            content="Health content",
+            category=other_cat,
+            author=self.staff_user,
+            is_published=True,
+        )
+        response = self.client.get(self.articles_url, {"category": "health"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        slugs = [item["slug"] for item in response.data]
+        self.assertIn("health-news", slugs)
+        self.assertNotIn("published-tech-story", slugs)
+
+    def test_search_filter(self):
+        response = self.client.get(self.articles_url, {"search": "Published Tech"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        slugs = [item["slug"] for item in response.data]
+        self.assertIn("published-tech-story", slugs)
+        self.assertNotIn("draft-tech-story", slugs)
+
+
 
 class ArticleSlugGenerationTests(APITestCase):
     def setUp(self):
@@ -518,3 +543,60 @@ class ArticleImageSelectionTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Verify image is a usable URL pointing to media
         self.assertIn("/media/articles/", response.data["image"])
+
+    def test_create_article_without_image_succeeds_and_returns_empty_image(self):
+        self.client.force_authenticate(user=self.staff_user)
+        payload = {
+            "title": "Story Without Any Image",
+            "summary": "This article deliberately has no image.",
+            "content": "Full story content without image attachment.",
+            "category": self.category.id,
+            "is_published": True,
+        }
+        response = self.client.post(self.create_url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data.get("image"), "")
+        self.assertIsNone(response.data.get("image_file"))
+
+        article = Article.objects.get(slug=response.data["slug"])
+        self.assertEqual(article.image, "")
+        self.assertFalse(bool(article.image_file))
+
+    def test_create_article_with_image_url(self):
+        self.client.force_authenticate(user=self.staff_user)
+        payload = {
+            "title": "Story With Image URL",
+            "summary": "This article has an online image URL.",
+            "content": "Full story content with online image URL.",
+            "category": self.category.id,
+            "image": "https://example.com/photos/story.jpg",
+            "is_published": True,
+        }
+        response = self.client.post(self.create_url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data.get("image"), "https://example.com/photos/story.jpg")
+
+    def test_clear_existing_image_and_uploaded_file(self):
+        self.client.force_authenticate(user=self.staff_user)
+        img_bytes = generate_test_image("PNG")
+        article = Article.objects.create(
+            title="Story To Clear Image",
+            slug="story-to-clear-image",
+            summary="Summary.",
+            content="Content.",
+            category=self.category,
+            author=self.staff_user,
+            is_published=True,
+        )
+        article.image_file.save("removable.png", io.BytesIO(img_bytes), save=True)
+        self.assertTrue(bool(article.image_file))
+
+        manage_url = reverse("article-manage", kwargs={"slug": article.slug})
+        response = self.client.patch(manage_url, {"image": ""}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data.get("image"), "")
+
+        article.refresh_from_db()
+        self.assertEqual(article.image, "")
+        self.assertFalse(bool(article.image_file))
+
