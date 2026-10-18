@@ -157,6 +157,12 @@ class ArticleSerializer(serializers.ModelSerializer):
         # If an uploaded image file is provided, clear manual image url to avoid conflict
         if attrs.get("image_file"):
             attrs["image"] = ""
+        elif "image" in attrs:
+            if attrs["image"]:
+                attrs["image_file"] = None
+            else:
+                attrs["image"] = ""
+                attrs["image_file"] = None
 
         return super().validate(attrs)
 
