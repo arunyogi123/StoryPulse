@@ -16,12 +16,31 @@ class ArticleListAPIView(generics.ListAPIView):
         if user.is_authenticated and user.is_staff:
             status_param = self.request.query_params.get("status")
             if status_param == "published":
-                return Article.objects.filter(is_published=True).select_related("category", "author")
-            if status_param == "draft":
-                return Article.objects.filter(is_published=False).select_related("category", "author")
-            return Article.objects.all().select_related("category", "author")
+                qs = Article.objects.filter(is_published=True).select_related("category", "author")
+            elif status_param == "draft":
+                qs = Article.objects.filter(is_published=False).select_related("category", "author")
+            else:
+                qs = Article.objects.all().select_related("category", "author")
+        else:
+            qs = Article.objects.filter(is_published=True).select_related("category", "author")
 
-        return Article.objects.filter(is_published=True).select_related("category", "author")
+        category_param = self.request.query_params.get("category")
+        if category_param:
+            if category_param.isdigit():
+                qs = qs.filter(category_id=int(category_param))
+            else:
+                qs = qs.filter(category__slug=category_param)
+
+        search_param = self.request.query_params.get("search")
+        if search_param:
+            from django.db.models import Q
+            qs = qs.filter(
+                Q(title__icontains=search_param)
+                | Q(summary__icontains=search_param)
+                | Q(content__icontains=search_param)
+            )
+
+        return qs
 
 
 # Retrieve one published article using its slug
