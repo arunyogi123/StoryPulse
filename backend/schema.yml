@@ -211,6 +211,23 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/accounts/users/:
+    get:
+      operationId: accounts_users_list
+      description: Read-only user listing for staff members only.
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminUser'
+          description: ''
   /api/accounts/verify-email/:
     post:
       operationId: accounts_verify_email_create
@@ -479,6 +496,17 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/dashboard/stats/:
+    get:
+      operationId: dashboard_stats_retrieve
+      description: Return dashboard statistics for staff users.
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/news/:
     get:
       operationId: news_list
@@ -549,13 +577,13 @@ paths:
       - news
       requestBody:
         content:
-          application/json:
+          multipart/form-data:
             schema:
               $ref: '#/components/schemas/Article'
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/Article'
-          multipart/form-data:
+          application/json:
             schema:
               $ref: '#/components/schemas/Article'
         required: true
@@ -580,13 +608,13 @@ paths:
       - news
       requestBody:
         content:
-          application/json:
+          multipart/form-data:
             schema:
               $ref: '#/components/schemas/PatchedArticle'
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/PatchedArticle'
-          multipart/form-data:
+          application/json:
             schema:
               $ref: '#/components/schemas/PatchedArticle'
       security:
@@ -620,13 +648,13 @@ paths:
       - news
       requestBody:
         content:
-          application/json:
+          multipart/form-data:
             schema:
               $ref: '#/components/schemas/Article'
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/Article'
-          multipart/form-data:
+          application/json:
             schema:
               $ref: '#/components/schemas/Article'
         required: true
@@ -840,6 +868,65 @@ paths:
           description: ''
 components:
   schemas:
+    AdminUser:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+        email:
+          type: string
+          format: email
+          readOnly: true
+          title: Email address
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        is_staff:
+          type: boolean
+          readOnly: true
+          title: Staff status
+          description: Designates whether the user can log into this admin site.
+        is_superuser:
+          type: boolean
+          readOnly: true
+          title: Superuser status
+          description: Designates that this user has all permissions without explicitly
+            assigning them.
+        is_active:
+          type: boolean
+          readOnly: true
+          title: Active
+          description: Designates whether this user should be treated as active. Unselect
+            this instead of deleting accounts.
+        date_joined:
+          type: string
+          format: date-time
+          readOnly: true
+        last_login:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - date_joined
+      - email
+      - first_name
+      - id
+      - is_active
+      - is_staff
+      - is_superuser
+      - last_login
+      - last_name
+      - username
     Article:
       type: object
       properties:
@@ -869,12 +956,11 @@ components:
           type: string
           readOnly: true
         image:
-          oneOf:
-          - type: string
-            format: uri
-            maxLength: 200
-          - type: string
-            maxLength: 0
+          type: string
+        image_file:
+          type: string
+          format: uri
+          nullable: true
         is_featured:
           type: boolean
         is_published:
@@ -895,7 +981,6 @@ components:
       - content
       - created_at
       - id
-      - slug
       - summary
       - title
       - updated_at
@@ -975,7 +1060,6 @@ components:
       - created_at
       - id
       - name
-      - slug
     ForgotPassword:
       type: object
       properties:
@@ -1013,12 +1097,11 @@ components:
           type: string
           readOnly: true
         image:
-          oneOf:
-          - type: string
-            format: uri
-            maxLength: 200
-          - type: string
-            maxLength: 0
+          type: string
+        image_file:
+          type: string
+          format: uri
+          nullable: true
         is_featured:
           type: boolean
         is_published:
@@ -1079,6 +1162,17 @@ components:
           type: string
           format: date-time
           readOnly: true
+        is_staff:
+          type: boolean
+          readOnly: true
+          title: Staff status
+          description: Designates whether the user can log into this admin site.
+        is_superuser:
+          type: boolean
+          readOnly: true
+          title: Superuser status
+          description: Designates that this user has all permissions without explicitly
+            assigning them.
     Register:
       type: object
       properties:
@@ -1208,9 +1302,22 @@ components:
           type: string
           format: date-time
           readOnly: true
+        is_staff:
+          type: boolean
+          readOnly: true
+          title: Staff status
+          description: Designates whether the user can log into this admin site.
+        is_superuser:
+          type: boolean
+          readOnly: true
+          title: Superuser status
+          description: Designates that this user has all permissions without explicitly
+            assigning them.
       required:
       - date_joined
       - id
+      - is_staff
+      - is_superuser
       - username
     VerifyEmail:
       type: object
