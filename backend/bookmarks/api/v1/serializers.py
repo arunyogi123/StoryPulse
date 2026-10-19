@@ -5,6 +5,15 @@ from news.models import Article
 
 
 class BookmarkedArticleSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(
+        source="category.name",
+        read_only=True,
+    )
+    author_username = serializers.CharField(
+        source="author.username",
+        read_only=True,
+    )
+
     class Meta:
         model = Article
         fields = [
@@ -12,10 +21,26 @@ class BookmarkedArticleSerializer(serializers.ModelSerializer):
             "title",
             "slug",
             "summary",
+            "category_name",
+            "author_username",
             "image",
             "created_at",
         ]
         read_only_fields = fields
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        request = self.context.get("request")
+        if instance.image_file:
+            try:
+                url = instance.image_file.url
+                if request:
+                    ret["image"] = request.build_absolute_uri(url)
+                else:
+                    ret["image"] = url
+            except Exception:
+                pass
+        return ret
 
 
 class BookmarkSerializer(serializers.ModelSerializer):
