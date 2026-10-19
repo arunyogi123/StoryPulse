@@ -44,3 +44,30 @@ class BookmarkDestroyAPIView(generics.DestroyAPIView):
         # If the bookmark belongs to another user or does not exist,
         # Django REST Framework returns a 404 Not Found response.
         return Bookmark.objects.filter(user=self.request.user)
+
+
+class BookmarkArticleDestroyAPIView(generics.GenericAPIView):
+    """
+    Allow authenticated readers to delete a bookmark by article ID.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, article_id):
+        bookmark = Bookmark.objects.filter(
+            user=request.user,
+            article_id=article_id,
+        ).first()
+        if not bookmark:
+            from rest_framework.response import Response
+            from rest_framework import status
+
+            return Response(
+                {"detail": "Bookmark not found for this article."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        bookmark.delete()
+        from rest_framework.response import Response
+        from rest_framework import status
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
