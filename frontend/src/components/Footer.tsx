@@ -13,18 +13,22 @@ import {
 
 // Shared type for categories (World, Tech, Science, etc.)
 import { Category } from "../types";
+import { ApiCategory } from "../lib/api";
 
 // Props contract for the Footer component:
 //   - onSelectCategory: called when the user clicks a quick-link category
 //   - onOpenAbout: called when the user clicks "How it Works"
+//   - categories: optional dynamic list of categories from database
 interface FooterProps {
   onSelectCategory: (cat: Category) => void;
   onOpenAbout: () => void;
+  categories?: ApiCategory[];
 }
 
 export const Footer: React.FC<FooterProps> = ({
   onSelectCategory,
   onOpenAbout,
+  categories,
 }) => {
   return (
     <footer className="mt-16 bg-white border-t border-stone-200">
@@ -104,48 +108,63 @@ export const Footer: React.FC<FooterProps> = ({
             </div>
           </div>
 
-          {/* Quick links: each calls onSelectCategory with the matching
-              Category value. Dots ("•") act as visual separators. */}
+          {/* Quick links: dynamic or default categories */}
           <div className="flex flex-wrap items-center justify-center gap-3 text-xs font-medium text-stone-600">
-            <button
-              onClick={() => onSelectCategory("World")}
-              className="hover:text-amber-700 cursor-pointer"
-            >
-              World
-            </button>
-            <span>•</span>
+            {categories && categories.length > 0 ? (
+              categories.map((cat, idx) => (
+                <React.Fragment key={cat.id}>
+                  <button
+                    onClick={() => onSelectCategory(cat.name)}
+                    className="hover:text-amber-700 cursor-pointer"
+                  >
+                    {cat.name}
+                  </button>
+                  <span>•</span>
+                </React.Fragment>
+              ))
+            ) : (
+              <>
+                <button
+                  onClick={() => onSelectCategory("World")}
+                  className="hover:text-amber-700 cursor-pointer"
+                >
+                  World
+                </button>
+                <span>•</span>
 
-            <button
-              onClick={() => onSelectCategory("Tech")}
-              className="hover:text-amber-700 cursor-pointer"
-            >
-              Technology
-            </button>
-            <span>•</span>
+                <button
+                  onClick={() => onSelectCategory("Tech")}
+                  className="hover:text-amber-700 cursor-pointer"
+                >
+                  Technology
+                </button>
+                <span>•</span>
 
-            <button
-              onClick={() => onSelectCategory("Science")}
-              className="hover:text-amber-700 cursor-pointer"
-            >
-              Space &amp; Science
-            </button>
-            <span>•</span>
+                <button
+                  onClick={() => onSelectCategory("Science")}
+                  className="hover:text-amber-700 cursor-pointer"
+                >
+                  Space &amp; Science
+                </button>
+                <span>•</span>
 
-            <button
-              onClick={() => onSelectCategory("Nature")}
-              className="hover:text-amber-700 cursor-pointer"
-            >
-              Environment
-            </button>
-            <span>•</span>
+                <button
+                  onClick={() => onSelectCategory("Nature")}
+                  className="hover:text-amber-700 cursor-pointer"
+                >
+                  Environment
+                </button>
+                <span>•</span>
 
-            <button
-              onClick={() => onSelectCategory("Life")}
-              className="hover:text-amber-700 cursor-pointer"
-            >
-              School &amp; Daily Life
-            </button>
-            <span>•</span>
+                <button
+                  onClick={() => onSelectCategory("Life")}
+                  className="hover:text-amber-700 cursor-pointer"
+                >
+                  School &amp; Daily Life
+                </button>
+                <span>•</span>
+              </>
+            )}
 
             {/* Opens the About modal — styled differently to stand out */}
             <button
