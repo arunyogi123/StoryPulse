@@ -1,19 +1,18 @@
 import React from "react";
+import Link from "next/link";
 import {
   Newspaper,
   Search,
   Bookmark,
   Type,
-  Sparkles,
   X,
   Info,
   Building2,
+  ShieldCheck,
 } from "lucide-react";
-import { ReadingLevel, TextSize } from "../types";
+import { TextSize } from "../types";
 
 interface HeaderProps {
-  readingLevel: ReadingLevel;
-  setReadingLevel: (level: ReadingLevel) => void;
   textSize: TextSize;
   setTextSize: (size: TextSize) => void;
   searchQuery: string;
@@ -25,8 +24,6 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  readingLevel,
-  setReadingLevel,
   textSize,
   setTextSize,
   searchQuery,
@@ -59,14 +56,26 @@ export const Header: React.FC<HeaderProps> = ({
           </span>
         </div>
 
-        <button
-          id="btn-learn-how-it-works"
-          onClick={onOpenAbout}
-          className="hidden sm:flex items-center gap-1 font-medium hover:underline cursor-pointer text-amber-900"
-        >
-          <Info className="w-3.5 h-3.5" />
-          <span>About SimpleNews</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <Link
+            id="btn-staff-portal"
+            href="/admin/dashboard"
+            className="flex items-center gap-1 font-semibold text-amber-900 hover:text-amber-950 transition-colors text-xs"
+            title="Editorial Staff Portal"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-800" />
+            <span>Staff Portal</span>
+          </Link>
+          <span className="hidden sm:inline text-amber-300">•</span>
+          <button
+            id="btn-learn-how-it-works"
+            onClick={onOpenAbout}
+            className="hidden sm:flex items-center gap-1 font-medium hover:underline cursor-pointer text-amber-900"
+          >
+            <Info className="w-3.5 h-3.5" />
+            <span>About SimpleNews</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Nav Bar */}
@@ -147,39 +156,6 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Reading Controls */}
           <div className="flex items-center justify-between sm:justify-end gap-2.5">
-            {/* Reading Level Switcher */}
-            <div className="flex items-center bg-stone-100 p-1 rounded-xl border border-stone-200 text-xs">
-
-              <button
-                id="btn-reading-level-1"
-                onClick={() => setReadingLevel("level1")}
-                className={`px-2.5 py-1 rounded-lg font-medium transition-all 
-                  cursor-pointer flex items-center gap-1 ${
-                    readingLevel === "level1"
-                      ? "bg-white text-amber-900 shadow-xs font-semibold"
-                      : "text-stone-600 hover:text-stone-900"
-                  }`}
-                title="Super Simple: short sentences and easiest words"
-              >
-                <Sparkles className="w-3 h-3 text-amber-600" />
-                <span>Super Simple</span>
-              </button>
-
-              <button
-                id="btn-reading-level-2"
-                onClick={() => setReadingLevel("level2")}
-                className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
-                  readingLevel === "level2"
-                    ? "bg-white text-amber-900 shadow-xs font-semibold"
-                    : "text-stone-600 hover:text-stone-900"
-                }`}
-                title="Standard Easy: clear articles with normal detail"
-              >
-                Standard Easy
-              </button>
-
-            </div>
-
             {/* Font Size Selector */}
             <div className="flex items-center bg-stone-100 p-1 rounded-xl border border-stone-200 text-xs">
               <span className="pl-1.5 pr-1 text-stone-400">
@@ -241,7 +217,6 @@ export const Header: React.FC<HeaderProps> = ({
               />
               <span>Saved ({savedCount})</span>
             </button>
-            
           </div>
         </div>
       </div>
