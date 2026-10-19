@@ -25,6 +25,7 @@ class EmailVerification(models.Model):
     def __str__(self):
         return f"Email verification for {self.user.username}"
 
+
 class PasswordReset(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,

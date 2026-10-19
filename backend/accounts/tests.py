@@ -96,4 +96,3 @@ class AdminUserListPermissionsTests(APITestCase):
         self.assertIn("username", first_user)
         self.assertIn("email", first_user)
         self.assertIn("is_staff", first_user)
-
