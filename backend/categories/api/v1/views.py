@@ -22,7 +22,6 @@ class CategoryListCreateAPIView(generics.ListCreateAPIView):
 
         return [permission() for permission in permission_classes]
 
-
 # Allow anyone to view a category, but only staff users to modify it.
 class CategoryDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Category.objects.all()
