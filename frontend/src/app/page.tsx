@@ -8,7 +8,15 @@ import React, { useState, useEffect, useMemo } from "react";
 
 // Static data + shared types used across the app
 import { ARTICLES_DATA } from "../data/newsData";
-import { Article, Category, ReadingLevel, TextSize } from "../types";
+import { Article, Category, TextSize } from "../types";
+import {
+  newsApi,
+  categoriesApi,
+  bookmarksApi,
+  tokenStorage,
+  ApiCategory,
+} from "../lib/api";
+import { adaptApiArticleToArticle } from "../lib/article-adapter";
 
 // Layout / UI components (header, nav, cards, modals, footer)
 import { Header } from "../components/Header";
@@ -28,6 +36,9 @@ import {
   BookOpenCheck,
   Sparkles,
   ArrowLeft,
+  AlertCircle,
+  RefreshCw,
+  WifiOff,
 } from "lucide-react";
 
 export default function Home() {
@@ -40,17 +51,21 @@ export default function Home() {
   const [mounted, setMounted] = useState(false);
 
   // User preferences (persisted to localStorage)
-  const [readingLevel, setReadingLevel] = useState<ReadingLevel>("level1");
   const [textSize, setTextSize] = useState<TextSize>("normal");
+
+  // Articles & Categories state: populated with live published articles and categories from backend
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [categories, setCategories] = useState<ApiCategory[]>([]);
+  const [isLiveFeed, setIsLiveFeed] = useState<boolean>(false);
+  const [backendOffline, setBackendOffline] = useState<boolean>(false);
+  const [loadingArticles, setLoadingArticles] = useState<boolean>(true);
 
   // Feed filters
   const [selectedCategory, setSelectedCategory] = useState<Category>("All");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Saved (bookmarked) articles — seeded with one demo ID
-  const [savedArticleIds, setSavedArticleIds] = useState<string[]>([
-    "solar-energy-record",
-  ]);
+  // Saved (bookmarked) articles
+  const [savedArticleIds, setSavedArticleIds] = useState<string[]>([]);
 
   // When true, the feed only shows bookmarked articles
   const [showSavedOnly, setShowSavedOnly] = useState(false);
@@ -65,43 +80,116 @@ export default function Home() {
   const [readCount, setReadCount] = useState<number>(0);
 
   // ─────────────────────────────────────────────────────────────
-  // EFFECTS: load persisted state on mount
+  // EFFECTS: load persisted state & live backend data on mount
   // ─────────────────────────────────────────────────────────────
+
+  const loadLivePortalData = async () => {
+    setLoadingArticles(true);
+    try {
+      const [liveArticles, liveCategories] = await Promise.all([
+        newsApi.getArticles(),
+        categoriesApi.getCategories().catch(() => []),
+      ]);
+
+      if (liveCategories && liveCategories.length > 0) {
+        setCategories(liveCategories);
+      }
+
+      if (liveArticles && liveArticles.length > 0) {
+        const adapted = liveArticles.map(adaptApiArticleToArticle);
+        setArticles(adapted);
+        setIsLiveFeed(true);
+        setBackendOffline(false);
+      } else {
+        // Backend reached but database has 0 published articles
+        setArticles([]);
+        setIsLiveFeed(true);
+        setBackendOffline(false);
+      }
+    } catch {
+      // Backend is unreachable: clearly designate offline demo archive
+      setArticles(ARTICLES_DATA);
+      setIsLiveFeed(false);
+      setBackendOffline(true);
+    } finally {
+      setLoadingArticles(false);
+    }
+  };
 
   useEffect(() => {
     setMounted(true);
     try {
-      // Restore reading level
-      const savedLevel = localStorage.getItem(
-        "simplenews_level",
-      ) as ReadingLevel;
-      if (savedLevel) setReadingLevel(savedLevel);
-
       // Restore text size
       const savedSize = localStorage.getItem("simplenews_size") as TextSize;
       if (savedSize) setTextSize(savedSize);
 
-      // Restore bookmarked article IDs
+      // Restore bookmarked article IDs from local storage (anonymous baseline)
       const savedIds = localStorage.getItem("simplenews_saved");
-      if (savedIds) setSavedArticleIds(JSON.parse(savedIds));
+      if (savedIds) {
+        try {
+          setSavedArticleIds(JSON.parse(savedIds));
+        } catch {
+          // ignore corrupted JSON
+        }
+      }
 
       // Restore session read count
       const count = sessionStorage.getItem("simplenews_read_count");
       if (count) setReadCount(parseInt(count, 10));
     } catch {
-      // If storage is blocked/corrupt, silently keep the defaults above
+      // If storage is blocked/corrupt, silently keep defaults
     }
+
+    // If an authenticated session exists, fetch backend bookmarks
+    const token = tokenStorage.getAccessToken();
+    if (token) {
+      bookmarksApi
+        .getBookmarks()
+        .then((bms) => {
+          if (bms && bms.length > 0) {
+            const apiIds = bms.map((b) => String(b.article.id));
+            setSavedArticleIds(apiIds);
+          }
+        })
+        .catch(() => {
+          // User token may be expired or offline; fallback to local bookmarks
+        });
+    }
+
+    // Load live articles and categories from Django backend
+    loadLivePortalData();
   }, []);
+
+  // Check URL query for deep-linked article (e.g. ?article=slug)
+  useEffect(() => {
+    if (typeof window === "undefined" || articles.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const targetSlugOrId = params.get("article");
+    if (!targetSlugOrId) return;
+
+    // Check loaded articles
+    const found = articles.find(
+      (a) => a.slug === targetSlugOrId || a.id === targetSlugOrId,
+    );
+    if (found) {
+      setActiveArticle(found);
+    } else {
+      // Fetch article detail by slug directly from backend
+      newsApi
+        .getArticleBySlug(targetSlugOrId)
+        .then((apiArt) => {
+          const adapted = adaptApiArticleToArticle(apiArt);
+          setActiveArticle(adapted);
+        })
+        .catch(() => {
+          // Article slug not found
+        });
+    }
+  }, [articles]);
 
   // ─────────────────────────────────────────────────────────────
   // EFFECTS: persist state whenever it changes
-  // (guarded by `mounted` so we don't overwrite storage on first render)
   // ─────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (!mounted) return;
-    localStorage.setItem("simplenews_level", readingLevel);
-  }, [readingLevel, mounted]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -119,34 +207,67 @@ export default function Home() {
 
   /**
    * Toggle the bookmark state for an article.
-   * Stops propagation so clicking the bookmark icon on a card
-   * doesn't also open the article modal.
+   * If logged in, syncs to backend bookmark API.
+   * Also maintains local storage for offline / anonymous visitors.
    */
-  const handleToggleSave = (id: string, e: React.MouseEvent) => {
+  const handleToggleSave = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setSavedArticleIds((prev) => {
-      if (prev.includes(id)) {
-        // Already saved → remove it
-        return prev.filter((item) => item !== id);
-      } else {
-        // Not saved → add it
-        return [...prev, id];
+    const token = tokenStorage.getAccessToken();
+    const isCurrentlySaved = savedArticleIds.includes(id);
+
+    // Optimistic state update
+    setSavedArticleIds((prev) =>
+      isCurrentlySaved ? prev.filter((item) => item !== id) : [...prev, id],
+    );
+
+    // If authenticated user with numeric article id, synchronize with Django bookmark API
+    const numericId = parseInt(id, 10);
+    if (token && !isNaN(numericId)) {
+      try {
+        if (isCurrentlySaved) {
+          await bookmarksApi.deleteBookmarkByArticleId(numericId);
+        } else {
+          await bookmarksApi.createBookmark(numericId);
+        }
+      } catch {
+        // Revert on API failure
+        setSavedArticleIds((prev) =>
+          isCurrentlySaved ? [...prev, id] : prev.filter((item) => item !== id),
+        );
       }
-    });
+    }
   };
 
   /**
-   * Open an article in the modal and bump the session read count.
+   * Open an article in the modal, update URL query parameter, and bump read count.
    */
   const handleSelectArticle = (article: Article) => {
     setActiveArticle(article);
-    setReadCount((prev) => {
-      const next = prev + 1;
-      if (typeof window !== "undefined") {
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("article", article.slug || article.id);
+      window.history.pushState(null, "", url.toString());
+
+      setReadCount((prev) => {
+        const next = prev + 1;
         sessionStorage.setItem("simplenews_read_count", next.toString());
-      }
-      return next;
-    });
+        return next;
+      });
+    }
+  };
+
+  /**
+   * Close the article reader modal and remove ?article from URL.
+   */
+  const handleCloseArticle = () => {
+    setActiveArticle(null);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("article");
+      const newQuery = url.searchParams.toString();
+      const newUrl = url.pathname + (newQuery ? `?${newQuery}` : "");
+      window.history.pushState(null, "", newUrl);
+    }
   };
 
   // ─────────────────────────────────────────────────────────────
@@ -160,7 +281,7 @@ export default function Home() {
    *   3. Search query (matches title, snippet, words-to-know, category)
    */
   const filteredArticles = useMemo(() => {
-    return ARTICLES_DATA.filter((article) => {
+    return articles.filter((article) => {
       // Saved-only mode overrides category filtering
       if (showSavedOnly && !savedArticleIds.includes(article.id)) {
         return false;
@@ -170,7 +291,8 @@ export default function Home() {
       if (
         !showSavedOnly &&
         selectedCategory !== "All" &&
-        article.category !== selectedCategory
+        article.category !== selectedCategory &&
+        article.categoryLabel !== selectedCategory
       ) {
         return false;
       }
@@ -180,10 +302,10 @@ export default function Home() {
         const q = searchQuery.toLowerCase();
         const matchesTitle =
           article.title.toLowerCase().includes(q) ||
-          article.simpleTitle.toLowerCase().includes(q);
+          Boolean(article.simpleTitle?.toLowerCase().includes(q));
         const matchesSnippet =
           article.shortSnippet.toLowerCase().includes(q) ||
-          article.superSimpleSnippet.toLowerCase().includes(q);
+          Boolean(article.superSimpleSnippet?.toLowerCase().includes(q));
         const matchesWords = article.wordsToKnow.some((w) =>
           w.word.toLowerCase().includes(q),
         );
@@ -194,7 +316,7 @@ export default function Home() {
       }
       return true;
     });
-  }, [selectedCategory, searchQuery, showSavedOnly, savedArticleIds]);
+  }, [articles, selectedCategory, searchQuery, showSavedOnly, savedArticleIds]);
 
   /**
    * Pick the featured article. We only show the hero card when the user
@@ -205,8 +327,8 @@ export default function Home() {
     if (showSavedOnly || searchQuery.trim() || selectedCategory !== "All") {
       return null;
     }
-    return ARTICLES_DATA.find((a) => a.featured) || ARTICLES_DATA[0];
-  }, [showSavedOnly, searchQuery, selectedCategory]);
+    return articles.find((a) => a.featured) || articles[0];
+  }, [articles, showSavedOnly, searchQuery, selectedCategory]);
 
   /**
    * The rest of the feed. If a featured article is being shown, remove it
@@ -236,10 +358,8 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col bg-stone-50 text-stone-800">
-      {/* Top navigation bar: reading level, text size, search, saved toggle, about */}
+      {/* Top navigation bar: text size, search, saved toggle, about */}
       <Header
-        readingLevel={readingLevel}
-        setReadingLevel={setReadingLevel}
         textSize={textSize}
         setTextSize={setTextSize}
         searchQuery={searchQuery}
@@ -252,6 +372,7 @@ export default function Home() {
 
       {/* Horizontal category pills (World, Tech, Science, etc.) */}
       <CategoryNav
+        categories={categories}
         selectedCategory={selectedCategory}
         setSelectedCategory={setSelectedCategory}
         showSavedOnly={showSavedOnly}
@@ -261,6 +382,36 @@ export default function Home() {
 
       {/* Main content area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8">
+        {/* Offline notice when backend cannot be reached */}
+        {backendOffline && (
+          <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-200/80 text-amber-900 shrink-0">
+                <WifiOff className="w-4 h-4 text-amber-800" />
+              </div>
+              <div>
+                <strong className="block font-bold text-stone-900">
+                  Offline Demonstration Archive
+                </strong>
+                <span className="text-stone-600">
+                  Django backend is currently offline. You are browsing the
+                  local demo archive.
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={loadLivePortalData}
+              disabled={loadingArticles}
+              className="self-start sm:self-center px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw
+                className={`w-3.5 h-3.5 ${loadingArticles ? "animate-spin" : ""}`}
+              />
+              <span>Retry Connection</span>
+            </button>
+          </div>
+        )}
+
         {/* Banner shown only in "saved only" mode */}
         {showSavedOnly && (
           <div
@@ -329,7 +480,6 @@ export default function Home() {
           <section aria-label="Featured Story">
             <FeaturedArticle
               article={featuredArticle}
-              readingLevel={readingLevel}
               onSelectArticle={handleSelectArticle}
               isSaved={savedArticleIds.includes(featuredArticle.id)}
               onToggleSave={handleToggleSave}
@@ -341,7 +491,7 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* LEFT: news feed cards (spans 8 of 12 columns on large screens) */}
           <div className="lg:col-span-8 space-y-6">
-            {/* Section header: title, count, and current reading level */}
+            {/* Section header: title, count */}
             <div className="flex items-center justify-between pb-3 border-b border-stone-200">
               <div className="flex items-center gap-2">
                 <h3 className="text-xl font-bold text-stone-900 font-news">
@@ -354,13 +504,18 @@ export default function Home() {
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-stone-200/70 text-stone-700">
                   {feedArticles.length}
                 </span>
-              </div>
 
-              <div className="text-xs text-stone-500 flex items-center gap-1.5">
-                <span>Reading Level:</span>
-                <span className="font-bold text-amber-700">
-                  {readingLevel === "level1" ? "Super Simple" : "Standard Easy"}
-                </span>
+                {isLiveFeed ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Live Portal
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-stone-100 text-stone-600 border border-stone-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-stone-400" />
+                    Demo Archive
+                  </span>
+                )}
               </div>
             </div>
 
@@ -414,7 +569,6 @@ export default function Home() {
                 <ArticleCard
                   key={article.id}
                   article={article}
-                  readingLevel={readingLevel}
                   onSelectArticle={handleSelectArticle}
                   isSaved={savedArticleIds.includes(article.id)}
                   onToggleSave={handleToggleSave}
@@ -533,10 +687,9 @@ export default function Home() {
       {/* Article reader modal (controlled by `activeArticle`) */}
       <ArticleModal
         article={activeArticle}
-        onClose={() => setActiveArticle(null)}
-        readingLevel={readingLevel}
-        setReadingLevel={setReadingLevel}
+        onClose={handleCloseArticle}
         textSize={textSize}
+        setTextSize={setTextSize}
         isSaved={
           activeArticle ? savedArticleIds.includes(activeArticle.id) : false
         }
@@ -548,6 +701,7 @@ export default function Home() {
 
       {/* Footer with category shortcuts + about link */}
       <Footer
+        categories={categories}
         onSelectCategory={(cat) => {
           // Clicking a footer category:
           // 1. exits saved-only mode
@@ -564,4 +718,3 @@ export default function Home() {
     </div>
   );
 }
-
