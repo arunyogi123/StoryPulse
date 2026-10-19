@@ -1,6 +1,4 @@
-export type Category = 'All' | 'World' | 'Tech' | 'Science' | 'Nature' | 'Life';
-
-export type ReadingLevel = 'level1' | 'level2'; 
+export type Category = string;
 
 export type TextSize = 'normal' | 'large' | 'xlarge';
 
@@ -18,21 +16,24 @@ export interface ContentSection {
 
 export interface Article {
   id: string;
+  slug?: string;
   title: string;
-  simpleTitle: string;
+  simpleTitle?: string;
   category: Category;
   categoryLabel: string;
   categoryIcon: string;
+  author?: string;
   date: string;
   readTime: string;
   imageUrl: string;
   imageCaption: string;
   featured?: boolean;
   shortSnippet: string;
-  superSimpleSnippet: string;
+  superSimpleSnippet?: string;
   takeaways: string[];
   whyItMatters: string;
   sections: ContentSection[];
+  simpleSections?: ContentSection[];
   wordsToKnow: WordDefinition[];
 }
 
