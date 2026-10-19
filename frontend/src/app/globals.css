@@ -13,3 +13,37 @@
 .font-news {
   font-family: "Newsreader", Georgia, serif;
 }
+
+/* Article Reading Area Font Size Scaling */
+.article-reading-body {
+  transition:
+    font-size 0.15s ease-out,
+    line-height 0.15s ease-out;
+}
+
+[data-text-size="normal"] .article-reading-body,
+.article-reading-body[data-text-size="normal"] {
+  --reading-font-size: 1.125rem;
+  --reading-line-height: 1.75;
+  --reading-heading-size: 1.375rem;
+  --reading-title-size: 2rem;
+  --reading-subtext-size: 1rem;
+}
+
+[data-text-size="large"] .article-reading-body,
+.article-reading-body[data-text-size="large"] {
+  --reading-font-size: 1.375rem;
+  --reading-line-height: 1.8;
+  --reading-heading-size: 1.625rem;
+  --reading-title-size: 2.375rem;
+  --reading-subtext-size: 1.15rem;
+}
+
+[data-text-size="xlarge"] .article-reading-body,
+.article-reading-body[data-text-size="xlarge"] {
+  --reading-font-size: 1.625rem;
+  --reading-line-height: 1.85;
+  --reading-heading-size: 1.875rem;
+  --reading-title-size: 2.75rem;
+  --reading-subtext-size: 1.25rem;
+}
