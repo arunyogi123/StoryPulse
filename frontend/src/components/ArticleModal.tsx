@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Article, ReadingLevel, TextSize } from "../types";
+import { Article, TextSize } from "../types";
 import {
   X,
   Bookmark,
@@ -16,14 +16,14 @@ import {
   Check,
   Camera,
   ArrowRight,
+  Type,
 } from "lucide-react";
 
 interface ArticleModalProps {
   article: Article | null;
   onClose: () => void;
-  readingLevel: ReadingLevel;
-  setReadingLevel: (level: ReadingLevel) => void;
   textSize: TextSize;
+  setTextSize?: (size: TextSize) => void;
   isSaved: boolean;
   onToggleSave: (id: string, e: React.MouseEvent) => void;
 }
@@ -31,9 +31,8 @@ interface ArticleModalProps {
 export const ArticleModal: React.FC<ArticleModalProps> = ({
   article,
   onClose,
-  readingLevel,
-  setReadingLevel,
   textSize,
+  setTextSize,
   isSaved,
   onToggleSave,
 }) => {
@@ -56,38 +55,55 @@ export const ArticleModal: React.FC<ArticleModalProps> = ({
     };
   }, [article]);
 
+  // Update document title for deep link and modal viewing
+  useEffect(() => {
+    if (!article) return;
+    const originalTitle = document.title;
+    document.title = `${article.title} | SimpleNews Media Group`;
+    return () => {
+      document.title = originalTitle;
+    };
+  }, [article]);
+
   if (!article) return null;
 
-  const displayTitle =
-    readingLevel === "level1" ? article.simpleTitle : article.title;
+  const readingSections =
+    article.sections && article.sections.length > 0
+      ? article.sections
+      : [{ paragraph: article.shortSnippet || "" }];
 
-  // Text size classes
-  const getTextSizeClasses = () => {
-    switch (textSize) {
-      case "large":
-        return {
-          title: "text-2xl sm:text-4xl",
-          body: "text-base sm:text-lg leading-relaxed",
-          heading: "text-xl font-bold",
-        };
-      case "xlarge":
-        return {
-          title: "text-3xl sm:text-5xl",
-          body: "text-lg sm:text-xl leading-loose",
-          heading: "text-2xl font-bold",
-        };
-      default:
-        return {
-          title: "text-xl sm:text-3xl",
-          body: "text-sm sm:text-base leading-relaxed",
-          heading: "text-lg font-bold",
-        };
-    }
+  // Font size configuration ensuring visible, measurable scaling without CSS overrides
+  const currentSizes = {
+    normal: {
+      title: { fontSize: "2rem", lineHeight: "1.25" },
+      heading: { fontSize: "1.375rem", lineHeight: "1.35" },
+      body: { fontSize: "1.125rem", lineHeight: "1.75" },
+      subtext: { fontSize: "1rem", lineHeight: "1.6" },
+      vocab: { fontSize: "0.875rem", lineHeight: "1.5" },
+    },
+    large: {
+      title: { fontSize: "2.375rem", lineHeight: "1.2" },
+      heading: { fontSize: "1.625rem", lineHeight: "1.3" },
+      body: { fontSize: "1.375rem", lineHeight: "1.8" },
+      subtext: { fontSize: "1.15rem", lineHeight: "1.65" },
+      vocab: { fontSize: "1rem", lineHeight: "1.55" },
+    },
+    xlarge: {
+      title: { fontSize: "2.75rem", lineHeight: "1.15" },
+      heading: { fontSize: "1.875rem", lineHeight: "1.25" },
+      body: { fontSize: "1.625rem", lineHeight: "1.85" },
+      subtext: { fontSize: "1.25rem", lineHeight: "1.7" },
+      vocab: { fontSize: "1.125rem", lineHeight: "1.6" },
+    },
+  }[textSize] || {
+    title: { fontSize: "2rem", lineHeight: "1.25" },
+    heading: { fontSize: "1.375rem", lineHeight: "1.35" },
+    body: { fontSize: "1.125rem", lineHeight: "1.75" },
+    subtext: { fontSize: "1rem", lineHeight: "1.6" },
+    vocab: { fontSize: "0.875rem", lineHeight: "1.5" },
   };
 
-  const styleClasses = getTextSizeClasses();
-
-  // Speech synthesis handlers
+  // Speech synthesis handlers using article content
   const handleToggleSpeech = () => {
     if (!("speechSynthesis" in window)) {
       alert("Text-to-speech is not supported in this browser.");
@@ -108,9 +124,9 @@ export const ArticleModal: React.FC<ArticleModalProps> = ({
     window.speechSynthesis.cancel();
 
     // Prepare clear text to speak
-    const textToSpeak = `${displayTitle}. 
+    const textToSpeak = `${article.title}. 
     In 10 seconds: ${article.takeaways.join(". ")}. 
-    ${article.sections.map((s) => `${s.heading ? s.heading + ". " : ""}${s.paragraph}`).join(" ")}`;
+    ${readingSections.map((s) => `${s.heading ? s.heading + ". " : ""}${s.paragraph}`).join(" ")}`;
 
     const utterance = new SpeechSynthesisUtterance(textToSpeak);
     utterance.rate = 0.88;
@@ -141,10 +157,41 @@ export const ArticleModal: React.FC<ArticleModalProps> = ({
 
   const handleCopyLink = () => {
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(window.location.href);
+      const shareUrl = `${window.location.origin}${window.location.pathname}?article=${encodeURIComponent(article.slug || article.id)}`;
+      navigator.clipboard.writeText(shareUrl);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
     }
+  };
+
+  // Structured Data (JSON-LD) for SEO
+  const canonicalUrl =
+    typeof window !== "undefined"
+      ? `${window.location.origin}${window.location.pathname}?article=${encodeURIComponent(article.slug || article.id)}`
+      : `https://simplenews.local/?article=${encodeURIComponent(article.slug || article.id)}`;
+
+  const articleJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    headline: article.title,
+    description: article.shortSnippet || article.title,
+    datePublished: article.date,
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": canonicalUrl,
+    },
+    author: {
+      "@type": "Person",
+      name: article.author || "SimpleNews Staff",
+    },
+    publisher: {
+      "@type": "Organization",
+      name: "SimpleNews Media Group",
+      url: typeof window !== "undefined" ? window.location.origin : "https://simplenews.local",
+    },
+    ...(article.imageUrl && article.imageUrl.trim() && !imgError
+      ? { image: [article.imageUrl] }
+      : {}),
   };
 
   return (
@@ -152,14 +199,23 @@ export const ArticleModal: React.FC<ArticleModalProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center p-2 
     sm:p-4 bg-stone-900/60 backdrop-blur-xs overflow-y-auto animate-fadeIn"
     >
+      {/* Safely escaped JSON-LD Structured Data for NewsArticle */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(articleJsonLd).replace(/</g, "\\u003c"),
+        }}
+      />
+
       <div
         className="relative w-full max-w-3xl bg-white rounded-2xl sm:rounded-3xl 
         border border-stone-200 shadow-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
+        data-text-size={textSize}
       >
         {/* Sticky Header inside modal */}
         <div
-          className="flex items-center justify-between px-4 sm:px-6 py-3 border-b 
+          className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b 
         border-stone-200 bg-stone-50/95 sticky top-0 z-20 backdrop-blur-xs"
         >
           <button
@@ -172,30 +228,59 @@ export const ArticleModal: React.FC<ArticleModalProps> = ({
             <span className="hidden sm:inline">Back to News</span>
           </button>
 
-          {/* Level selector pill */}
-          <div className="flex items-center bg-stone-200/70 p-0.5 rounded-lg text-xs">
-            <button
-              onClick={() => setReadingLevel("level1")}
-              className={`px-2 py-1 rounded-md font-medium transition-all ${
-                readingLevel === "level1"
-                  ? "bg-white text-amber-900 shadow-2xs font-semibold"
-                  : "text-stone-600"
-              }`}
-            >
-              Super Simple
-            </button>
-            <button
-              onClick={() => setReadingLevel("level2")}
-              className={`px-2 py-1 rounded-md font-medium transition-all ${
-                readingLevel === "level2"
-                  ? "bg-white text-amber-900 shadow-2xs font-semibold"
-                  : "text-stone-600"
-              }`}
-            >
-              Standard
-            </button>
+          {/* Reading Controls: Font size switcher */}
+          <div className="flex items-center gap-2">
+
+            {/* Font Size Selector directly in modal reading toolbar */}
+            {setTextSize && (
+              <div
+                className="flex items-center bg-stone-200/70 p-0.5 rounded-lg text-xs"
+                title="Adjust text size"
+              >
+                <span className="pl-1.5 pr-0.5 text-stone-500">
+                  <Type className="w-3 h-3" />
+                </span>
+                <button
+                  id="btn-modal-text-size-normal"
+                  onClick={() => setTextSize("normal")}
+                  className={`w-6 h-6 rounded-md font-bold transition-all cursor-pointer flex items-center justify-center ${
+                    textSize === "normal"
+                      ? "bg-white text-stone-900 shadow-2xs"
+                      : "text-stone-600 hover:text-stone-900"
+                  }`}
+                  title="Normal text size"
+                >
+                  A
+                </button>
+                <button
+                  id="btn-modal-text-size-large"
+                  onClick={() => setTextSize("large")}
+                  className={`w-6 h-6 rounded-md font-bold text-xs transition-all cursor-pointer flex items-center justify-center ${
+                    textSize === "large"
+                      ? "bg-white text-stone-900 shadow-2xs"
+                      : "text-stone-600 hover:text-stone-900"
+                  }`}
+                  title="A+ (Larger text)"
+                >
+                  A+
+                </button>
+                <button
+                  id="btn-modal-text-size-xlarge"
+                  onClick={() => setTextSize("xlarge")}
+                  className={`w-6 h-6 rounded-md font-black text-sm transition-all cursor-pointer flex items-center justify-center ${
+                    textSize === "xlarge"
+                      ? "bg-white text-stone-900 shadow-2xs"
+                      : "text-stone-600 hover:text-stone-900"
+                  }`}
+                  title="A++ (Extra large text)"
+                >
+                  A++
+                </button>
+              </div>
+            )}
           </div>
 
+          {/* Modal Actions */}
           <div className="flex items-center gap-1.5">
             <button
               id={`btn-modal-bookmark-${article.id}`}
@@ -233,26 +318,48 @@ export const ArticleModal: React.FC<ArticleModalProps> = ({
         </div>
 
         {/* Scrollable Article Body */}
-        <div className="overflow-y-auto px-5 sm:px-10 py-6 sm:py-8 space-y-6">
-          {/* Category & Meta */}
-          <div className="flex flex-wrap items-center gap-2.5 text-xs text-stone-500 font-medium">
-            <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold">
-              {article.categoryLabel}
-            </span>
-            <span>•</span>
-            <span className="flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" />
-              {article.readTime}
-            </span>
-            <span>•</span>
-            <span>{article.date}</span>
+        <div
+          id="article-modal-body"
+          data-text-size={textSize}
+          className="article-reading-body overflow-y-auto px-5 sm:px-10 py-6 sm:py-8 space-y-6"
+          style={
+            {
+              "--reading-font-size": currentSizes.body.fontSize,
+              "--reading-line-height": currentSizes.body.lineHeight,
+              "--reading-heading-size": currentSizes.heading.fontSize,
+              "--reading-title-size": currentSizes.title.fontSize,
+            } as React.CSSProperties
+          }
+        >
+          {/* Article Metadata */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2.5 text-xs text-stone-500 font-medium">
+              <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold">
+                {article.categoryLabel}
+              </span>
+              {article.author && (
+                <>
+                  <span>•</span>
+                  <span className="font-medium text-stone-600">By {article.author}</span>
+                </>
+              )}
+              <span>•</span>
+              <span className="flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5" />
+                {article.readTime}
+              </span>
+              <span>•</span>
+              <span>{article.date}</span>
+            </div>
           </div>
 
           {/* Headline */}
           <h1
-            className={`font-news font-bold text-stone-900 tracking-tight leading-tight ${styleClasses.title}`}
+            id="article-modal-title"
+            style={currentSizes.title}
+            className="font-news font-bold text-stone-900 tracking-tight leading-tight"
           >
-            {displayTitle}
+            {article.title}
           </h1>
 
           {/* Audio Read-Aloud Tool for Beginners */}
@@ -309,35 +416,27 @@ export const ArticleModal: React.FC<ArticleModalProps> = ({
             </div>
           </div>
 
-          {/* Article Hero Photo */}
-          <div className="rounded-2xl overflow-hidden bg-stone-100 border border-stone-200">
-            {!imgError ? (
+          {/* Article Hero Photo - only rendered when an image exists and has not failed */}
+          {Boolean(article.imageUrl && article.imageUrl.trim() && !imgError) && (
+            <div className="rounded-2xl overflow-hidden bg-stone-100 border border-stone-200">
               <img
                 src={article.imageUrl}
                 alt={article.title}
                 onError={() => setImgError(true)}
-                className="w-full max-h-[380px] object-cover"
+                className="w-full max-h-[420px] object-cover"
                 referrerPolicy="no-referrer"
               />
-            ) : (
-              <div
-                className="w-full h-48 sm:h-64 bg-gradient-to-br from-stone-800 to-stone-900 f
-              lex flex-col items-center justify-center p-6 text-center"
-              >
-                <Sparkles className="w-12 h-12 text-amber-400 mb-2" />
-                <span className="text-stone-300 font-semibold text-sm max-w-md">
-                  {article.title}
-                </span>
-              </div>
-            )}
-            <div
-              className="p-2.5 bg-stone-50 border-t border-stone-100 text-[11px] text-stone-500 
-            font-medium flex items-center gap-1.5"
-            >
-              <Camera className="w-3.5 h-3.5 text-stone-400 shrink-0" />
-              <span>{article.imageCaption}</span>
+              {article.imageCaption && (
+                <div
+                  className="p-2.5 bg-stone-50 border-t border-stone-100 text-[11px] text-stone-500 
+                font-medium flex items-center gap-1.5"
+                >
+                  <Camera className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                  <span>{article.imageCaption}</span>
+                </div>
+              )}
             </div>
-          </div>
+          )}
 
           {/* "In 10 Seconds" - 3 Key Facts */}
           <div className="bg-stone-50 border border-stone-200 rounded-2xl p-5 sm:p-6">
@@ -349,9 +448,10 @@ export const ArticleModal: React.FC<ArticleModalProps> = ({
               {article.takeaways.map((item, idx) => (
                 <li
                   key={idx}
-                  className="flex items-start gap-2.5 text-sm text-stone-700"
+                  style={currentSizes.subtext}
+                  className="flex items-start gap-2.5 text-stone-700"
                 >
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
                   <span className="leading-snug">{item}</span>
                 </li>
               ))}
@@ -364,24 +464,29 @@ export const ArticleModal: React.FC<ArticleModalProps> = ({
               <Sparkles className="w-4 h-4 text-sky-600" />
               <span>Why This Matters To You</span>
             </div>
-            <p className="text-sm text-sky-900 leading-relaxed">
+            <p
+              style={currentSizes.subtext}
+              className="text-sky-900 leading-relaxed"
+            >
               {article.whyItMatters}
             </p>
           </div>
 
           {/* Story Content Sections */}
           <div className="space-y-6 pt-2">
-            {article.sections.map((sec, idx) => (
+            {readingSections.map((sec, idx) => (
               <div key={idx} className="space-y-2">
                 {sec.heading && (
                   <h3
-                    className={`text-stone-900 font-news ${styleClasses.heading}`}
+                    style={currentSizes.heading}
+                    className="text-stone-900 font-news font-bold"
                   >
                     {sec.heading}
                   </h3>
                 )}
                 <p
-                  className={`text-stone-700 font-normal ${styleClasses.body}`}
+                  style={currentSizes.body}
+                  className="text-stone-700 font-normal"
                 >
                   {sec.paragraph}
                 </p>
@@ -390,44 +495,49 @@ export const ArticleModal: React.FC<ArticleModalProps> = ({
           </div>
 
           {/* Words To Know & Vocabulary Helper */}
-          <div className="pt-4 border-t border-stone-200">
-            <div className="flex items-center gap-2 text-xs font-bold text-stone-900 uppercase tracking-wider mb-4">
-              <HelpCircle className="w-4 h-4 text-amber-600" />
-              <span>Words to Know: New Vocabulary In This Story</span>
-            </div>
+          {article.wordsToKnow && article.wordsToKnow.length > 0 && (
+            <div className="pt-4 border-t border-stone-200">
+              <div className="flex items-center gap-2 text-xs font-bold text-stone-900 uppercase tracking-wider mb-4">
+                <HelpCircle className="w-4 h-4 text-amber-600" />
+                <span>Words to Know: New Vocabulary In This Story</span>
+              </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {article.wordsToKnow.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="p-4 rounded-xl bg-amber-50/60 border border-amber-200/80"
-                >
-                  <div className="flex items-baseline justify-between gap-2 mb-1">
-                    <span className="font-bold text-stone-900 text-sm">
-                      {item.word}
-                    </span>
-                    {item.pronunciation && (
-                      <span className="text-[11px] text-amber-800 italic font-medium">
-                        [{item.pronunciation}]
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {article.wordsToKnow.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-xl bg-amber-50/60 border border-amber-200/80"
+                  >
+                    <div className="flex items-baseline justify-between gap-2 mb-1">
+                      <span className="font-bold text-stone-900 text-sm">
+                        {item.word}
                       </span>
-                    )}
+                      {item.pronunciation && (
+                        <span className="text-[11px] text-amber-800 italic font-medium">
+                          [{item.pronunciation}]
+                        </span>
+                      )}
+                    </div>
+                    <p
+                      style={currentSizes.vocab}
+                      className="text-stone-700 mb-2 leading-relaxed flex items-start gap-1"
+                    >
+                      <ArrowRight className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
+                      <span>
+                        <strong className="font-semibold text-stone-900">
+                          Meaning:
+                        </strong>{" "}
+                        {item.simpleMeaning}
+                      </span>
+                    </p>
+                    <p className="text-[11px] text-stone-500 italic bg-white/70 p-2 rounded-lg border border-amber-100">
+                      “{item.exampleSentence}”
+                    </p>
                   </div>
-                  <p className="text-xs text-stone-700 mb-2 leading-relaxed flex items-start gap-1">
-                    <ArrowRight className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
-                    <span>
-                      <strong className="font-semibold text-stone-900">
-                        Meaning:
-                      </strong>{" "}
-                      {item.simpleMeaning}
-                    </span>
-                  </p>
-                  <p className="text-[11px] text-stone-500 italic bg-white/70 p-2 rounded-lg border border-amber-100">
-                    “{item.exampleSentence}”
-                  </p>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Modal Footer */}
